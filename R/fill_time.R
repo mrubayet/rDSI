@@ -3,6 +3,7 @@
 #' Thsi function fills the missing timestamp that are not available in the data
 #' due to "no precipitation"
 #' @param df (data.frame) data.frame with missing timestamp
+#' @return data.frame with filled timestamp
 #' @export
 
 fill_time<-function(df){
@@ -10,6 +11,5 @@ fill_time<-function(df){
   ts<-data.frame(Timestamp=ts)
   dt<- df %>%
     dplyr::bind_rows(ts) %>%
-    tidyr::complete(Id, Timestamp,
-                    fill = list(Prcp = 0))
+    tidyr::complete(Id, Timestamp,fill = list(Prcp = 0))
 }
