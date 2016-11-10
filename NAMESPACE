@@ -1,0 +1,10 @@
+
+export(get_dsi3240)
+export(fill_time)
+
+import(dplyr)
+importFrom(readr,read_fwf)
+importFrom(readr,fwf_widths)
+importFrom(rvest,html_text)
+importFrom(xml2, read_html)
+importFrom(utils, download.file)

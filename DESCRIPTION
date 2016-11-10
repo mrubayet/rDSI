@@ -1,0 +1,14 @@
+Package: rDSI
+Type: Package
+Title: Download and process DSI-3240 and DSI-3260 Precipitation data
+Version: 0.1.0
+Authors@R: person("Md Rubayet", "Mortuza", email = "rubayet.ce@gmail.com", role = c("aut", "cre"))
+Description: The digital dataset DSI-3240 is US Hourly Precipitation Data (HPD)
+    and DSI-3260 is U.S. 15 Minute Precipitation Data archived at the National
+    Climatic Data Center (NCDC). This package downloads and processes these data
+    set.
+License: GPL-3
+LazyData: TRUE
+RoxygenNote: 5.0.1
+Imports: dplyr, readr , rvest , xml2 , tidyr,utils,datasets
+Suggests:roxygen2 (>= 5.0.1) , rgdal , ggmap
