@@ -1,113 +1,143 @@
-#' Download Hourly Precipitation Data (HPD)
+#' Download Hourly(DSI3240)/15-minute (DSI-3260) Precipitation Data
 #'
-#' This function downloads digital data set DSI-3240 which is hourly precipitation
+#' This function downloads digital data set DSI-3240 and DSI-3260 which is hourly and 15-minute precipitation respectively
 #' archived at the National Climatic Data Center (NCDC).Data will be downloaded State wise
 #' User will need to install 7zip to unzip compressed "tar.Z" raw files.
+#' @param type (character) Data type. "dsi3240" for hourly or "dsi3260" for 15-minute. Default: "dsi3240".
 #' @param state (character) state name abbreviation. Required if state.code =NULL
 #' @param state.code  (Numerical) State code according to the documentation
-#' of DSI-3240.  Required if state =NULL
+#' of DSI-3240 and DSI-3260.  Required if state =NULL
 #' @references    ftp://ftp.ncdc.noaa.gov/pub/data/hourly_precip-3240/dsi3240.pdf
 #' @param dirc (character) path to store downloaded files. Default: current diretectory.
-#' @return A data.frame containing site id , timestamp , houly precipitation in inch and flags.
+#' @param df (Logical) If TRUE A data.frame containing site id , timestamp , precipitation in inch and flags
+#' will be returned. Default: FALSE.
 #' @export
 #' @import  dplyr
 #' @import  readr
 #' @importFrom xml2 read_html
 #' @importFrom rvest html_text
 
-get_dsi3240 <- function(state=NULL,state.code=NULL,dirc=getwd()){
-  base_url <- "ftp://ftp.ncdc.noaa.gov/pub/data/hourly_precip-3240/"
+get_data <- function(type = "dsi3240",state=NULL,state.code=NULL,dirc=getwd(),df = FALSE){
+  if(!type %in% c("dsi3240","dsi3260")){
+    stop("Invalid type of data mentioned")
+  }
+  
   if(is.null(state) & is.null(state.code)){
     stop("Please specify state or state code")
   }
   if(is.null(state.code)){
     state.code <- state_code(state)
   }
-  df1 <- dsi3240_1998(state.code=state.code,dirc=dirc,base_url = base_url)
-  df2 <- dsi3240_1999_2011(state.code=state.code,dirc=dirc,base_url = base_url)
-  df3 <- dsi3240_2012_present(state.code=state.code,dirc=dirc,base_url = base_url)
-  dt<-rbind(df1,df2,df3)%>% group_by(Id)%>%arrange(Timestamp)%>%as.data.frame(.)
+  
+  if (type == "dsi3240"){
+    base_url <- "ftp://ftp.ncdc.noaa.gov/pub/data/hourly_precip-3240/"
+  }else{
+    base_url <- "ftp://ftp.ncdc.noaa.gov/pub/data/15min_precip-3260/"
+  }
+  if(df){
+    dt1<-dsi_1998(type =type,state.code=state.code,dirc=dirc,base_url = base_url,df=df)
+    dt2<-dsi_1999_2011(type =type,state.code=state.code,dirc=dirc,base_url = base_url,df=df)
+    dt3<-dsi_2012(type =type,state.code=state.code,dirc=dirc,base_url = base_url,df=df)
+    dt<-rbind(dt1,dt2,dt3)%>% group_by(Id)%>%arrange(Timestamp)%>%as.data.frame(.)
+    return(dt)
+  }else{
+  dsi_1998(type =type,state.code=state.code,dirc=dirc,base_url = base_url,df=df)
+  dsi_1999_2011(type =type,state.code=state.code,dirc=dirc,base_url = base_url,df=df)
+  dsi_2012(type =type,state.code=state.code,dirc=dirc,base_url = base_url,df=df)
+  }
 }
 
 #Downloads and unzip raw "tar.Z"  for pre-1999 files in a specified directory
-#Produce a tidy data.frame of the data
 # @param state.code  (Numerical). State code.  required
 # @param dirc (character) path to store downloaded files. Default: current diretectory.
 # @param delete (logical) whether or not to delete the raw compressed files.
 # @param base_url (character) "ftp://ftp.ncdc.noaa.gov/pub/data/hourly_precip-3240/"
-# @return A data.frame
 # @export
 
 
-dsi3240_1998<-function(state.code,dirc=getwd(),delete = T,base_url){
-  xx=xml2::read_html(paste0(base_url,state.code,"/")) %>%
+dsi_1998<-function(type,state.code,dirc=getwd(),base_url,df){
+  
+  xx=read_html(paste0(base_url,sprintf("%02d",state.code),"/")) %>%
     rvest::html_text() %>%
-    regmatches(gregexpr(paste0('(?<=3240_',state.code,'_).*?(?=-1998)'), ., perl=TRUE))
-
-  urlpath<- paste0("3240_",sprintf("%02d",state.code),"_",as.character(xx),"-",sprintf("%04d",1998))
+    regmatches(gregexpr(paste0('(?<=',substr(type,4,7),'_',sprintf("%02d",state.code),'_).*?(?=-1998)'), ., perl=TRUE))
+  
+  urlpath<- paste0(substr(type,4,7),'_',sprintf("%02d",state.code),"_",as.character(xx),"-",sprintf("%04d",1998))
   datpath<-paste0(dirc,"/",urlpath,".tar.Z")
+  
   if (!file.exists(file.path(dirc,urlpath)) & !length(list.files(file.path(dirc,urlpath)))>0){
     url<-paste0(base_url,sprintf("%02d",state.code), "/",urlpath,".tar.Z")
     suppressWarnings(download.file(url,destfile=datpath,mode="wb"))
     suppressWarnings(Decompress7Zip(datpath,file.path(dirc),delete = T))
-    suppressWarnings(Decompress7Zip(sub(".Z","",datpath),file.path(dirc,urlpath),delete = T))
+    suppressWarnings(Decompress7Zip(tools::file_path_sans_ext(datpath),file.path(dirc,urlpath),delete = T))
   }
-  files<-data.frame(sr=file.path(dirc,urlpath,list.files(file.path(dirc,urlpath))))
-  df<-files %>% group_by(sr) %>% do(read_f(.$sr)) %>% ungroup() %>% select(-sr) %>%
+  if(df){
+    files<-data.frame(sr=file.path(dirc,urlpath,list.files(file.path(dirc,urlpath))))
+    dt<-files %>% group_by(sr) %>% do(read_f(.$sr)) %>% ungroup() %>% select(-sr) %>%
     group_by(X2) %>% do(tidy_df(.)) %>% ungroup() %>% select(-X2)
+    
+    return(dt)
+  }
 }
 
 #Downloads and unzip raw "tar.Z"  for 1999-2011 files in a specified directory
-#Produce a tidy data.frame of the data
 # @param state.code  (Numerical). State code.  required
 # @param dirc (character) path to store downloaded files. Default: current diretectory.
 # @param delete (logical) whether or not to delete the raw compressed files.
 # @param base_url (character) "ftp://ftp.ncdc.noaa.gov/pub/data/hourly_precip-3240/"
-# @return A data.frame
 # @export
 
-dsi3240_1999_2011<-function(state.code,dirc=getwd(),delete = T,base_url){
+dsi_1999_2011<-function(type,state.code,dirc=getwd(),delete = T,base_url){
   y = data.frame(yr=1999:2011)
-  y$urlpath<- paste0("3240_",sprintf("%02d",state.code),"_",y$yr,"-",y$yr)
+  y$urlpath<- paste0(substr(type,4,7),'_',sprintf("%02d",state.code),"_",y$yr,"-",y$yr)
   y$datpath<-paste0(dirc,"/",y$urlpath,".tar.Z")
   y$url<-paste0(base_url,sprintf("%02d",state.code), "/",y$urlpath,".tar.Z")
-
+  
+  if (type == "dsi3260"){
+    y=y[-nrow(y),]
+  }
+  
   tryCatch({y%>% group_by(yr)%>% do(suppressMessages(suppressWarnings(download.file(.$url,destfile=.$datpath,mode="wb"))))}, error=function(e){})
   tryCatch({y%>% group_by(yr)%>% do(suppressMessages(suppressWarnings(Decompress7Zip(.$datpath,file.path(dirc),delete = T))))}, error=function(e){})
-  tryCatch({y%>% group_by(yr)%>%do(suppressMessages(suppressWarnings(Decompress7Zip(sub(".Z","",.$datpath),file.path(dirc,.$urlpath),delete = T))))}, error=function(e){})
-
-  files<-y %>% group_by(yr)%>%do(as.data.frame(file.path(dirc,.$urlpath,list.files(file.path(dirc,.$urlpath)))))
-  names(files)[c(2)]="sr"
-  df<-files %>% group_by(sr) %>% do(read_f(.$sr)) %>% ungroup() %>% select(-sr) %>%
-    group_by(X2) %>% do(tidy_df(.)) %>% ungroup() %>% select(-X2)%>% as.data.frame(.)
-  df
+  tryCatch({y%>% group_by(yr)%>%do(suppressMessages(suppressWarnings(Decompress7Zip(tools::file_path_sans_ext(.$datpath),file.path(dirc,.$urlpath),delete = T))))}, error=function(e){})
+  
+  if(df){
+    files<-y %>% group_by(yr)%>%do(as.data.frame(file.path(dirc,.$urlpath,list.files(file.path(dirc,.$urlpath)))))
+    names(files)[c(2)]="sr"
+    dt<-files %>% group_by(sr) %>% do(read_f(.$sr)) %>% ungroup() %>% select(-sr) %>%
+     group_by(X2) %>% do(tidy_df(.)) %>% ungroup() %>% select(-X2)%>% as.data.frame(.)
+   
+    return(dt)
+  }
 }
 
 #Downloads and unzip raw "tar.Z"  for 2012-present files in a specified directory
-#Produce a tidy data.frame of the data
 # @param state.code  (Numerical). State code.  required
 # @param dirc (character) path to store downloaded files. Default: current diretectory.
 # @param delete (logical) whether or not to delete the raw compressed files.
 # @param base_url (character) "ftp://ftp.ncdc.noaa.gov/pub/data/hourly_precip-3240/"
-# @return A data.frame
 # @export
 
-dsi3240_2012_present<-function(state.code,dirc=getwd(),delete = T,base_url){
-  y = data.frame(yr=2011:2013) %>% group_by(yr) %>% do(data.frame(mon=tolower(month.abb))) %>%
-    mutate(fold=paste0(dirc,"/3240_",sprintf("%02d",state.code),"_",sprintf("%04d",yr),"-", sprintf("%04d",yr)),
-           urlpath=paste0("3240",mon,sprintf("%04d",yr),".dat"),
+dsi_2012<-function(type,state.code,dirc=getwd(),base_url){
+  y <- data.frame(yr=2011:2013) %>% group_by(yr) %>% do(data.frame(mon=tolower(month.abb))) %>%
+    mutate(fold=paste0(dirc,'/',substr(type,4,7),'_',sprintf("%02d",state.code),"_",sprintf("%04d",yr),"-", sprintf("%04d",yr)),
+           urlpath=paste0(substr(type,4,7),mon,sprintf("%04d",yr),".dat"),
            datpath = paste0(fold,"/",urlpath),
-           url = paste0(base_url,"by_month",sprintf("%04d",yr), "/", urlpath))%>%ungroup()%>%
-    filter(!row_number()%in% c(1:11))
+           url = paste0(base_url,"by_month",sprintf("%04d",yr), "/", urlpath))%>%ungroup()
+  if(type=="dsi3240") {
+    y<-y %>% filter(!row_number()%in% c(1:11))
+  } 
+  
   xx = file.path(dirc,(list.files(dirc)))
   tryCatch({y %>%filter(!fold %in% xx) %>%group_by(yr) %>% do(dir.create(unique(.$fold)))}, error=function(e){})
-
+  
   tryCatch({y%>% group_by(yr,mon)%>% do(suppressMessages(suppressWarnings(download.file(.$url,destfile=.$datpath))))}, error=function(e){})
-
-  df<-y %>% group_by(yr,mon) %>% do(read_f(.$datpath)) %>% ungroup() %>% select(-yr,-mon) %>%
-    filter(as.numeric(substr(X2,1,2))==state.code)%>% group_by(X2) %>% do(tidy_df(.)) %>%
-    ungroup() %>% select(-X2)%>% as.data.frame(.)
-  df
+  
+  if(df){
+   dt<-y %>% group_by(yr,mon) %>% do(read_f(.$datpath)) %>% ungroup() %>% select(-yr,-mon) %>%
+     filter(as.numeric(substr(X2,1,2))==state.code)%>% group_by(X2) %>% do(tidy_df(.)) %>%
+     ungroup() %>% select(-X2)%>% as.data.frame(.)
+   return(dt)
+}
 }
 
 # Reading the raw data file
