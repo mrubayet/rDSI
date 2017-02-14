@@ -1,7 +1,8 @@
 #'Regional Mann-Kendall Test
 
-#'
-#'
+#' This function performs Regional Mann-kendall test 
+#' @param x (Numeric) 'x' can be a vector, matrix, or data.frame.
+
 
 reg.mk<-function(x){
     mk <- mk.tfpw(x)
