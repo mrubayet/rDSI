@@ -1,6 +1,6 @@
 
-export(get_dsi3240)
-export(fill_time)
+export(get_data)
+export(read_raw)
 
 import(dplyr)
 importFrom(readr,read_fwf)
