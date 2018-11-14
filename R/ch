@@ -1,0 +1,28 @@
+library(tidyverse)
+library(rvest)
+library(stringr)
+library(dplyr)
+library(readr)
+msg = "https://raw.githubusercontent.com/mrubayet/rDSI/master/message.html"
+
+msg_txt=read_html(x = "message.html")
+
+extract_nodes <- function(msg, css) {
+  msg %>%
+    html_nodes(css) %>%
+    html_text()
+}
+
+dates <- data.frame(timestamp = msg_txt %>%
+  extract_nodes("div[class='_3-94 _2lem']"))[-1,] %>% 
+  str_replace(",", "") %>%
+  parse_datetime(format = "%b %d %Y %H:%M%p") %>% na.omit() %>% data.frame(date = .)
+
+  
+  chat_log <- data_frame(
+    user = extract_nodes(msg_txt, "div[class='_3-96 _2pio _2lek _2lel']"),
+    dates = dates$date,
+    message = extract_nodes(msg_txt, "div[class='_3-96 _2let']")) %>% arrange(dates)
+  
+  chat_log %>% group_by(user) %>% summarise(n = n()) %>% ungroup() %>%
+    mutate(p = n/sum(n)*100) %>% arrange(-p)
